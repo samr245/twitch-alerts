@@ -1,0 +1,43 @@
+name: Twitch notify
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # every 5 minutes (GitHub may delay runs by a few minutes)
+  workflow_dispatch:         # lets you run it manually from the Actions tab
+    inputs:
+      test_alert:
+        description: "Send a test alert instead of checking Twitch"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write            # needed so it can save state.json
+
+concurrency:
+  group: twitch-notify
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Check Twitch
+        env:
+          TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+          TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: python3 twitch_notify.py ${{ inputs.test_alert && '--test' || '' }}
+
+      - name: Save who has been alerted
+        run: |
+          if [ -n "$(git status --porcelain state.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add state.json
+            git commit -m "Update state"
+            git push
+          fi
